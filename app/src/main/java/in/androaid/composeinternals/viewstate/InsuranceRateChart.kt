@@ -117,7 +117,10 @@ fun InsuranceRateChart1(
                     start = avgPoints[i],
                     end = avgPoints[i + 1],
                     strokeWidth = 3f,
-                    pathEffect = if (style.showAvgDashedLine) PathEffect.dashPathEffect(floatArrayOf(12f, 12f)) else null
+                    pathEffect = when (style.avgLineType) {
+                        LineType.Dashed -> PathEffect.dashPathEffect(floatArrayOf(12f, 12f))
+                        LineType.Solid -> null
+                    }
                 )
             }
 
@@ -216,6 +219,10 @@ fun InsuranceRateChart1(
 @Composable
 fun PreviewInsuranceRateChart() {
     InsuranceRateChart1(
+        style = ChartStyle(yourLineColor = Color.Green,
+            avgLineColor = Color.Blue,
+            avgLineType = LineType.Dashed
+        ),
         data = RateChartData(
             labels = listOf("Sep", "Oct", "Nov", "Dec", "Jan", "Feb"),
             yourRates = List(6) { 37f },

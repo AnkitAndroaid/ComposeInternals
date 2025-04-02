@@ -1,6 +1,7 @@
 package `in`.androaid.composeinternals
 
 import ChartConfiguration
+import ChartStyle
 import InsuranceRateChart1
 import RateChartData
 import android.os.Bundle
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import `in`.androaid.composeinternals.ui.theme.ComposeInternalsTheme
 
 class MainActivity : ComponentActivity() {
@@ -27,6 +29,10 @@ class MainActivity : ComponentActivity() {
 
                     Box(modifier = Modifier.padding(innerPadding)){
                         InsuranceRateChart1(
+                            style = ChartStyle(yourLineColor = Color.Green,
+                                avgLineColor = Color.Blue,
+                                avgLineType = LineType.Solid
+                            ),
                             data = RateChartData(
                                 labels = listOf("Sep", "Oct", "Nov", "Dec", "Jan", "Feb"),
                                 yourRates = List(6) { 37f },
