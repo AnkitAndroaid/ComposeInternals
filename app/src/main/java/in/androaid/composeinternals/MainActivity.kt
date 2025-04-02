@@ -6,12 +6,16 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -19,11 +23,9 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Fill
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import `in`.androaid.composeinternals.ui.theme.ComposeInternalsTheme
@@ -41,7 +43,7 @@ class MainActivity : ComponentActivity() {
                 ) { innerPadding ->
 
                     Box(modifier = Modifier.padding(innerPadding)){
-                        InsuranceRateChart(innerPadding)
+                        InsuranceRateChart()
                     }
 
                 }
@@ -51,25 +53,17 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun InsuranceRateChart(paddingValues: PaddingValues) {
-    val density = LocalDensity.current
-    val paddingPx = with(density) { 50.dp.toPx() }
-    val tooltipWidth = with(density) { 140.dp.toPx() }
-    val tooltipHeight = with(density) { 70.dp.toPx() }
-    val pointRadiusPx = with(density) { 4.dp.toPx() }
-
+fun InsuranceRateChart() {
     val months = listOf("Sep", "Oct", "Nov", "Dec", "Jan", "Feb")
-    val yourRate = List(6) { 37f }
+    val yourRate = List(months.size) { 37f }
     val averageRate = listOf(110f, 115f, 140f, 160f, 220f, 292f)
 
-    val maxRate = (averageRate + yourRate).maxOrNull() ?: 0f
-    val minRate = 0f
-
-    val padding = 50.dp
-    val pointRadius = 4.dp
-
-
     val selectedIndex = remember { mutableStateOf<Int?>(null) }
+
+    val density = LocalDensity.current
+    val chartPadding = 16.dp
+    val chartInnerPadding = 8.dp
+    val pointRadius = 4.dp
 
     Box(
         modifier = Modifier
@@ -77,43 +71,54 @@ fun InsuranceRateChart(paddingValues: PaddingValues) {
             .height(300.dp)
             .pointerInput(Unit) {
                 detectTapGestures { offset ->
-                    val width = size.width
-                    val xStep = (size.width - paddingPx) / (months.size - 1)
-                    val tappedX = offset.x
-                    val index =
-                        ((offset.x - paddingPx) / xStep)
-                            .roundToInt()
-                            .coerceIn(0, months.lastIndex)
-                            .coerceIn(0, months.lastIndex)
+                    val chartPaddingPx = with(density) { chartPadding.toPx() }
+                    val chartWidth = size.width - 2 * chartPaddingPx
+                    val xStep = chartWidth / (months.size - 1)
+                    val index = ((offset.x - chartPaddingPx) / xStep)
+                        .roundToInt()
+                        .coerceIn(0, months.lastIndex)
                     selectedIndex.value = index
                 }
             }
     ) {
-        Canvas(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp)
+        Canvas(modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = chartPadding)
         ) {
-            val chartHeight = size.height - paddingPx
-            val chartWidth = size.width - paddingPx
-            val xStep = chartWidth / (months.size - 1)
-            val yStep = chartHeight / (maxRate - minRate)
+            val chartPaddingPx = with(density) { chartPadding.toPx() }
+            val innerPadPx = with(density) { chartInnerPadding.toPx() }
 
-            // Draw Y-axis lines and labels
+            val drawableLeft = chartPaddingPx + innerPadPx
+            val drawableRight = size.width - chartPaddingPx - innerPadPx
+            val chartWidth = drawableRight - drawableLeft
+            val chartHeight = size.height - chartPaddingPx
+
+            val maxRate = (yourRate + averageRate).maxOrNull() ?: 0f
+            val yStep = chartHeight / maxRate
+            val xStep = chartWidth / (months.size - 1)
+
+            val avgPoints = averageRate.mapIndexed { i, value ->
+                Offset(x = drawableLeft + i * xStep, y = chartHeight - value * yStep)
+            }
+            val yourPoints = yourRate.mapIndexed { i, value ->
+                Offset(x = drawableLeft + i * xStep, y = chartHeight - value * yStep)
+            }
+
+            // Y-axis lines
             val yValues = listOf(110f, 158f, 205f, 253f, 300f)
-            yValues.forEach { yValue ->
-                val y = chartHeight - ((yValue - minRate) * yStep)
+            yValues.forEach { y ->
+                val yOffset = chartHeight - y * yStep
                 drawLine(
                     color = Color.LightGray,
-                    start = Offset(paddingPx, y),
-                    end = Offset(size.width, y),
+                    start = Offset(drawableLeft, yOffset),
+                    end = Offset(drawableRight, yOffset),
                     strokeWidth = 1f,
                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f))
                 )
                 drawContext.canvas.nativeCanvas.drawText(
-                    "$${yValue.toInt()}",
+                    "$${y.toInt()}",
                     0f,
-                    y,
+                    yOffset,
                     Paint().apply {
                         textSize = 30f
                         color = android.graphics.Color.DKGRAY
@@ -121,43 +126,11 @@ fun InsuranceRateChart(paddingValues: PaddingValues) {
                 )
             }
 
-            fun getPoints(values: List<Float>): List<Offset> {
-                return values.mapIndexed { index, value ->
-                    val x = paddingPx + xStep * index
-                    val y = chartHeight - ((value - minRate) * yStep)
-                    Offset(x, y)
-                }
-            }
-
-            val avgPoints = getPoints(averageRate)
-            val yourPoints = getPoints(yourRate)
-
-            // Draw dashed average rate line
-            for (i in 0 until avgPoints.lastIndex) {
-                drawLine(
-                    color = Color.Gray,
-                    start = avgPoints[i],
-                    end = avgPoints[i + 1],
-                    strokeWidth = 3f,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 12f)) // Dashed line
-                )
-            }
-
-            // Draw solid your rate line
-            for (i in 0 until yourPoints.lastIndex) {
-                drawLine(
-                    color = Color(0xFF00C853), // Green line
-                    start = yourPoints[i],
-                    end = yourPoints[i + 1],
-                    strokeWidth = 4f
-                )
-            }
-
-            // Draw X-axis labels
-            months.forEachIndexed { index, label ->
-                val x = paddingPx + xStep * index
+            // X-axis labels
+            months.forEachIndexed { i, month ->
+                val x = drawableLeft + i * xStep
                 drawContext.canvas.nativeCanvas.drawText(
-                    label,
+                    month,
                     x - 20f,
                     size.height,
                     Paint().apply {
@@ -167,16 +140,27 @@ fun InsuranceRateChart(paddingValues: PaddingValues) {
                 )
             }
 
-//            // Draw dots on both lines
-//            (avgPoints + yourPoints).forEach {
-//                drawCircle(
-//                    color = Color.Black,
-//                    center = it,
-//                    radius = pointRadiusPx
-//                )
-//            }
+            // Draw lines
+            for (i in 0 until avgPoints.lastIndex) {
+                drawLine(
+                    color = Color.Gray,
+                    start = avgPoints[i],
+                    end = avgPoints[i + 1],
+                    strokeWidth = 3f,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 12f))
+                )
+            }
 
-            // Tooltip on tap (shown above average line)
+            for (i in 0 until yourPoints.lastIndex) {
+                drawLine(
+                    color = Color(0xFF00C853),
+                    start = yourPoints[i],
+                    end = yourPoints[i + 1],
+                    strokeWidth = 4f
+                )
+            }
+
+            // Tooltip logic
             selectedIndex.value?.let { index ->
                 val avgPt = avgPoints[index]
                 val yourPt = yourPoints[index]
@@ -201,36 +185,38 @@ fun InsuranceRateChart(paddingValues: PaddingValues) {
                 val cornerRadius = 20f
                 val triangleHeight = 16f
                 val triangleWidth = 24f
-                val verticalSpacing = 20f
+                val verticalSpacing = 12f
 
-                val canvasWidth = size.width
-                val tooltipXCentered = avgPt.x - tooltipWidth / 2
-
-                // Clamp tooltip so it stays within screen horizontally
-                val tooltipLeft = tooltipXCentered.coerceIn(0f, canvasWidth - tooltipWidth)
-                val tooltipRight = tooltipLeft + tooltipWidth
-
-                // ➕ Check available space on top
                 val spaceAbove = avgPt.y
-                val spaceBelow = size.height - avgPt.y
-
                 val showAbove = spaceAbove > tooltipHeight + triangleHeight + verticalSpacing
 
                 val tooltipTop = if (showAbove) {
-                    // Tooltip above the data point
                     avgPt.y - tooltipHeight - triangleHeight - verticalSpacing
                 } else {
-                    // Tooltip below the data point
                     avgPt.y + triangleHeight + verticalSpacing
                 }
 
-                // Constrain triangle within tooltip width
-                val triangleCenterX = avgPt.x.coerceIn(
-                    tooltipLeft + triangleWidth / 2,
-                    tooltipRight - triangleWidth / 2
+                val tooltipXCentered = avgPt.x - tooltipWidth / 2
+                val tooltipLeft = tooltipXCentered.coerceIn(
+                    drawableLeft,
+                    drawableRight - tooltipWidth
                 )
+                val tooltipRight = tooltipLeft + tooltipWidth
 
-                // 🧱 Tooltip box
+                // Decide triangle placement logic
+                val triangleSide = when {
+                    avgPt.x < tooltipLeft + cornerRadius -> "LEFT"
+                    avgPt.x > tooltipRight - cornerRadius -> "RIGHT"
+                    else -> "CENTER"
+                }
+
+                val triangleCenterX = when (triangleSide) {
+                    "LEFT" -> tooltipLeft + cornerRadius
+                    "RIGHT" -> tooltipRight - cornerRadius
+                    else -> avgPt.x
+                }
+
+                // Draw tooltip box
                 drawRoundRect(
                     color = Color.Black,
                     topLeft = Offset(tooltipLeft, tooltipTop),
@@ -239,24 +225,50 @@ fun InsuranceRateChart(paddingValues: PaddingValues) {
                     style = Fill
                 )
 
-                // 🔻 Triangle (below box if tooltip is above, else above box)
+                // Angled triangle
                 val trianglePath = androidx.compose.ui.graphics.Path().apply {
                     if (showAbove) {
-                        // Triangle points down (below tooltip)
-                        moveTo(triangleCenterX - triangleWidth / 2, tooltipTop + tooltipHeight)
-                        lineTo(triangleCenterX + triangleWidth / 2, tooltipTop + tooltipHeight)
-                        lineTo(triangleCenterX, tooltipTop + tooltipHeight + triangleHeight)
+                        when (triangleSide) {
+                            "LEFT" -> {
+                                moveTo(triangleCenterX, tooltipTop + tooltipHeight)
+                                lineTo(triangleCenterX + triangleWidth, tooltipTop + tooltipHeight)
+                                lineTo(triangleCenterX + triangleWidth / 2, tooltipTop + tooltipHeight + triangleHeight)
+                            }
+                            "RIGHT" -> {
+                                moveTo(triangleCenterX, tooltipTop + tooltipHeight)
+                                lineTo(triangleCenterX - triangleWidth, tooltipTop + tooltipHeight)
+                                lineTo(triangleCenterX - triangleWidth / 2, tooltipTop + tooltipHeight + triangleHeight)
+                            }
+                            else -> {
+                                moveTo(triangleCenterX - triangleWidth / 2, tooltipTop + tooltipHeight)
+                                lineTo(triangleCenterX + triangleWidth / 2, tooltipTop + tooltipHeight)
+                                lineTo(triangleCenterX, tooltipTop + tooltipHeight + triangleHeight)
+                            }
+                        }
                     } else {
-                        // Triangle points up (above tooltip)
-                        moveTo(triangleCenterX - triangleWidth / 2, tooltipTop)
-                        lineTo(triangleCenterX + triangleWidth / 2, tooltipTop)
-                        lineTo(triangleCenterX, tooltipTop - triangleHeight)
+                        when (triangleSide) {
+                            "LEFT" -> {
+                                moveTo(triangleCenterX, tooltipTop)
+                                lineTo(triangleCenterX + triangleWidth, tooltipTop)
+                                lineTo(triangleCenterX + triangleWidth / 2, tooltipTop - triangleHeight)
+                            }
+                            "RIGHT" -> {
+                                moveTo(triangleCenterX, tooltipTop)
+                                lineTo(triangleCenterX - triangleWidth, tooltipTop)
+                                lineTo(triangleCenterX - triangleWidth / 2, tooltipTop - triangleHeight)
+                            }
+                            else -> {
+                                moveTo(triangleCenterX - triangleWidth / 2, tooltipTop)
+                                lineTo(triangleCenterX + triangleWidth / 2, tooltipTop)
+                                lineTo(triangleCenterX, tooltipTop - triangleHeight)
+                            }
+                        }
                     }
                     close()
                 }
                 drawPath(trianglePath, Color.Black)
 
-                // 📝 Text inside tooltip
+                // Tooltip text
                 tooltipLines.forEachIndexed { i, line ->
                     drawContext.canvas.nativeCanvas.drawText(
                         line,
@@ -266,71 +278,16 @@ fun InsuranceRateChart(paddingValues: PaddingValues) {
                     )
                 }
 
-                // 🔴 Highlight selected points
-                drawCircle(Color.Red, 8f, avgPt)
-                drawCircle(Color.Red, 8f, yourPt)
+                // Highlight points
+                drawCircle(Color.Red, with(density) { pointRadius.toPx() }, avgPt)
+                drawCircle(Color.Red, with(density) { pointRadius.toPx() }, yourPt)
             }
-
         }
     }
 }
 
 @Preview(showBackground = true)
 @Composable
-fun PreviewInsuranceChart() {
-    InsuranceRateChart(PaddingValues())
+fun PreviewInsuranceRateChart() {
+    InsuranceRateChart()
 }
-
-
-@Composable
-fun ImageExample() {
-    Image(
-        painterResource(R.drawable.smart_ac_controller),
-        contentDescription = "Smart AC Controller",
-        modifier = Modifier
-            .fillMaxSize()
-            .size(100.dp)
-    )
-}
-
-
-@Composable
-fun ImageExample2() {
-    Image(
-        painterResource(R.drawable.smart_ac_controller),
-        contentDescription = "Smart AC Controller",
-        modifier = Modifier
-            .fillMaxSize()
-            .wrapContentSize(unbounded = false)
-            .size(100.dp)
-    )
-}
-
-
-//@Preview
-//@Composable
-//fun ImageExamplePreview(){
-//    ImageExample()
-//}
-//
-//@Preview
-//@Composable
-//fun ImageExample2Preview(){
-//    ImageExample2()
-//}
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-//@Preview(showBackground = true)
-//@Composable
-//fun GreetingPreview() {
-//    ComposeInternalsTheme {
-//        Greeting("Android")
-//    }
-//}
