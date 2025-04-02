@@ -2,7 +2,7 @@ package `in`.androaid.composeinternals
 
 import ChartConfiguration
 import ChartStyle
-import InsuranceRateChart1
+import InsuranceRateChart
 import RateChartData
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -28,7 +28,7 @@ class MainActivity : ComponentActivity() {
                 ) { innerPadding ->
 
                     Box(modifier = Modifier.padding(innerPadding)){
-                        InsuranceRateChart1(
+                        InsuranceRateChart(
                             style = ChartStyle(yourLineColor = Color.Green,
                                 avgLineColor = Color.Blue,
                                 avgLineType = LineType.Solid

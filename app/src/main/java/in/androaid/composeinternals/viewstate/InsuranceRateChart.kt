@@ -15,6 +15,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
@@ -23,8 +24,11 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import kotlin.math.roundToInt
 
+// Configuration data classes and enums remain unchanged...
+// Assume they are defined here as in the previous version
+
 @Composable
-fun InsuranceRateChart1(
+fun InsuranceRateChart(
     data: RateChartData,
     config: ChartConfiguration = ChartConfiguration(),
     style: ChartStyle = ChartStyle(
@@ -42,7 +46,7 @@ fun InsuranceRateChart1(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(height = dimensions.height)
+            .height(dimensions.height)
             .pointerInput(Unit) {
                 detectTapGestures { offset ->
                     val chartPaddingPx = with(density) { dimensions.outerPadding.toPx() }
@@ -78,151 +82,190 @@ fun InsuranceRateChart1(
                 Offset(drawableLeft + i * xStep, chartHeight - value * yStep)
             }
 
-            config.yAxisGridValues.forEach { y ->
-                val yOffset = chartHeight - y * yStep
-                drawLine(
-                    color = Color.LightGray,
-                    start = Offset(drawableLeft, yOffset),
-                    end = Offset(drawableRight, yOffset),
-                    strokeWidth = 1f,
-                    pathEffect = if (config.showDashedLines) PathEffect.dashPathEffect(floatArrayOf(10f, 10f)) else null
-                )
-                drawContext.canvas.nativeCanvas.drawText(
-                    "$${y.toInt()}",
-                    0f,
-                    yOffset,
-                    Paint().apply {
-                        textSize = 30f
-                        color = android.graphics.Color.DKGRAY
-                    }
-                )
-            }
-
-            data.labels.forEachIndexed { i, label ->
-                val x = drawableLeft + i * xStep
-                drawContext.canvas.nativeCanvas.drawText(
-                    label,
-                    x - 20f,
-                    size.height,
-                    Paint().apply {
-                        textSize = 30f
-                        color = android.graphics.Color.DKGRAY
-                    }
-                )
-            }
-
-            for (i in 0 until avgPoints.lastIndex) {
-                drawLine(
-                    color = style.avgLineColor,
-                    start = avgPoints[i],
-                    end = avgPoints[i + 1],
-                    strokeWidth = 3f,
-                    pathEffect = when (style.avgLineType) {
-                        LineType.Dashed -> PathEffect.dashPathEffect(floatArrayOf(12f, 12f))
-                        LineType.Solid -> null
-                    }
-                )
-            }
-
-            for (i in 0 until yourPoints.lastIndex) {
-                drawLine(
-                    color = style.yourLineColor,
-                    start = yourPoints[i],
-                    end = yourPoints[i + 1],
-                    strokeWidth = 4f
-                )
-            }
+            drawYAxisLabels(config, yStep, chartHeight, drawableLeft, drawableRight)
+            drawXAxisLabels(data.labels, drawableLeft, xStep, size.height)
+            drawLineGraph(avgPoints, style.avgLineColor, dashed = style.showAvgDashedLine)
+            drawLineGraph(yourPoints, style.yourLineColor, dashed = false)
 
             if (tooltipConfig.showTooltip) {
                 selectedIndex.value?.let { index ->
-                    val avgPt = avgPoints[index]
-                    val yourPt = yourPoints[index]
-
-                    val tooltipLines = tooltipConfig.tooltipFormatter(index, data.yourRates[index], data.averageRates[index])
-
-                    val paint = Paint().apply {
-                        textSize = 28f
-                        color = style.tooltipTextColor.toArgb()
-                        isAntiAlias = true
-                    }
-
-                    val maxLineWidth = tooltipLines.maxOf { paint.measureText(it) }
-                    val lineHeight = 34f
-                    val tooltipPadding = 16f
-                    val tooltipWidth = maxLineWidth + tooltipPadding * 2
-                    val tooltipHeight = lineHeight * tooltipLines.size + tooltipPadding
-
-                    val cornerRadius = 20f
-                    val triangleHeight = 16f
-                    val triangleWidth = 24f
-                    val verticalSpacing = 12f
-
-                    val spaceAbove = avgPt.y
-                    val spaceBelow = size.height - avgPt.y
-                    val showAbove = spaceAbove > tooltipHeight + triangleHeight + verticalSpacing
-
-                    val tooltipTop = if (showAbove) {
-                        avgPt.y - tooltipHeight - triangleHeight - verticalSpacing
-                    } else {
-                        avgPt.y + triangleHeight + verticalSpacing
-                    }
-
-                    val tooltipXCentered = avgPt.x - tooltipWidth / 2
-                    val tooltipLeft = tooltipXCentered.coerceIn(drawableLeft, drawableRight - tooltipWidth)
-                    val tooltipRight = tooltipLeft + tooltipWidth
-
-                    val triangleCenterX = avgPt.x.coerceIn(
-                        tooltipLeft + triangleWidth / 2,
-                        tooltipRight - triangleWidth / 2
+                    drawTooltip(
+                        index = index,
+                        avgPt = avgPoints[index],
+                        yourPt = yourPoints[index],
+                        yourRate = data.yourRates[index],
+                        avgRate = data.averageRates[index],
+                        chartWidth = chartWidth,
+                        drawableLeft = drawableLeft,
+                        drawableRight = drawableRight,
+                        sizeHeight = size.height,
+                        style = style,
+                        dimensions = dimensions,
+                        density = density,
+                        tooltipConfig = tooltipConfig
                     )
-
-                    drawRoundRect(
-                        color = style.tooltipBackground,
-                        topLeft = Offset(tooltipLeft, tooltipTop),
-                        size = Size(tooltipWidth, tooltipHeight),
-                        cornerRadius = CornerRadius(cornerRadius, cornerRadius),
-                        style = Fill
-                    )
-
-                    val trianglePath = androidx.compose.ui.graphics.Path().apply {
-                        if (showAbove) {
-                            moveTo(triangleCenterX - triangleWidth / 2, tooltipTop + tooltipHeight)
-                            lineTo(triangleCenterX + triangleWidth / 2, tooltipTop + tooltipHeight)
-                            lineTo(triangleCenterX, tooltipTop + tooltipHeight + triangleHeight)
-                        } else {
-                            moveTo(triangleCenterX - triangleWidth / 2, tooltipTop)
-                            lineTo(triangleCenterX + triangleWidth / 2, tooltipTop)
-                            lineTo(triangleCenterX, tooltipTop - triangleHeight)
-                        }
-                        close()
-                    }
-                    drawPath(trianglePath, style.tooltipBackground)
-
-                    tooltipLines.forEachIndexed { i, line ->
-                        drawContext.canvas.nativeCanvas.drawText(
-                            line,
-                            tooltipLeft + tooltipPadding,
-                            tooltipTop + tooltipPadding + (i + 1) * lineHeight - 8f,
-                            paint
-                        )
-                    }
-
-                    drawCircle(style.pointHighlightColor, with(density) { dimensions.pointRadius.toPx() }, avgPt)
-                    drawCircle(style.pointHighlightColor, with(density) { dimensions.pointRadius.toPx() }, yourPt)
                 }
             }
         }
     }
 }
 
+private fun DrawScope.drawYAxisLabels(
+    config: ChartConfiguration,
+    yStep: Float,
+    chartHeight: Float,
+    drawableLeft: Float,
+    drawableRight: Float
+) {
+    config.yAxisGridValues.forEach { y ->
+        val yOffset = chartHeight - y * yStep
+        drawLine(
+            color = Color.LightGray,
+            start = Offset(drawableLeft, yOffset),
+            end = Offset(drawableRight, yOffset),
+            strokeWidth = 1f,
+            pathEffect = if (config.showDashedLines) PathEffect.dashPathEffect(floatArrayOf(10f, 10f)) else null
+        )
+        drawContext.canvas.nativeCanvas.drawText(
+            "$${y.toInt()}",
+            0f,
+            yOffset,
+            Paint().apply {
+                textSize = 30f
+                color = android.graphics.Color.DKGRAY
+            }
+        )
+    }
+}
+
+private fun DrawScope.drawXAxisLabels(
+    labels: List<String>,
+    drawableLeft: Float,
+    xStep: Float,
+    chartBottom: Float
+) {
+    labels.forEachIndexed { i, label ->
+        val x = drawableLeft + i * xStep
+        drawContext.canvas.nativeCanvas.drawText(
+            label,
+            x - 20f,
+            chartBottom,
+            Paint().apply {
+                textSize = 30f
+                color = android.graphics.Color.DKGRAY
+            }
+        )
+    }
+}
+
+private fun DrawScope.drawLineGraph(
+    points: List<Offset>,
+    color: Color,
+    dashed: Boolean = false
+) {
+    for (i in 0 until points.lastIndex) {
+        drawLine(
+            color = color,
+            start = points[i],
+            end = points[i + 1],
+            strokeWidth = 3f,
+            pathEffect = if (dashed) PathEffect.dashPathEffect(floatArrayOf(12f, 12f)) else null
+        )
+    }
+}
+
+private fun DrawScope.drawTooltip(
+    index: Int,
+    avgPt: Offset,
+    yourPt: Offset,
+    yourRate: Float,
+    avgRate: Float,
+    chartWidth: Float,
+    drawableLeft: Float,
+    drawableRight: Float,
+    sizeHeight: Float,
+    style: ChartStyle,
+    dimensions: ChartDimensions,
+    density: androidx.compose.ui.unit.Density,
+    tooltipConfig: TooltipConfig
+) {
+    val tooltipLines = tooltipConfig.tooltipFormatter(index, yourRate, avgRate)
+
+    val paint = Paint().apply {
+        textSize = 28f
+        color = style.tooltipTextColor.toArgb()
+        isAntiAlias = true
+    }
+
+    val maxLineWidth = tooltipLines.maxOf { paint.measureText(it) }
+    val lineHeight = 34f
+    val tooltipPadding = 16f
+    val tooltipWidth = maxLineWidth + tooltipPadding * 2
+    val tooltipHeight = lineHeight * tooltipLines.size + tooltipPadding
+
+    val cornerRadius = 20f
+    val triangleHeight = 16f
+    val triangleWidth = 24f
+    val verticalSpacing = 12f
+
+    val spaceAbove = avgPt.y
+    val spaceBelow = sizeHeight - avgPt.y
+    val showAbove = spaceAbove > tooltipHeight + triangleHeight + verticalSpacing
+
+    val tooltipTop = if (showAbove) {
+        avgPt.y - tooltipHeight - triangleHeight - verticalSpacing
+    } else {
+        avgPt.y + triangleHeight + verticalSpacing
+    }
+
+    val tooltipXCentered = avgPt.x - tooltipWidth / 2
+    val tooltipLeft = tooltipXCentered.coerceIn(drawableLeft, drawableRight - tooltipWidth)
+    val tooltipRight = tooltipLeft + tooltipWidth
+
+    val triangleCenterX = avgPt.x.coerceIn(
+        tooltipLeft + triangleWidth / 2,
+        tooltipRight - triangleWidth / 2
+    )
+
+    drawRoundRect(
+        color = style.tooltipBackground,
+        topLeft = Offset(tooltipLeft, tooltipTop),
+        size = Size(tooltipWidth, tooltipHeight),
+        cornerRadius = CornerRadius(cornerRadius, cornerRadius),
+        style = Fill
+    )
+
+    val trianglePath = androidx.compose.ui.graphics.Path().apply {
+        if (showAbove) {
+            moveTo(triangleCenterX - triangleWidth / 2, tooltipTop + tooltipHeight)
+            lineTo(triangleCenterX + triangleWidth / 2, tooltipTop + tooltipHeight)
+            lineTo(triangleCenterX, tooltipTop + tooltipHeight + triangleHeight)
+        } else {
+            moveTo(triangleCenterX - triangleWidth / 2, tooltipTop)
+            lineTo(triangleCenterX + triangleWidth / 2, tooltipTop)
+            lineTo(triangleCenterX, tooltipTop - triangleHeight)
+        }
+        close()
+    }
+    drawPath(trianglePath, style.tooltipBackground)
+
+    tooltipLines.forEachIndexed { i, line ->
+        drawContext.canvas.nativeCanvas.drawText(
+            line,
+            tooltipLeft + tooltipPadding,
+            tooltipTop + tooltipPadding + (i + 1) * lineHeight - 8f,
+            paint
+        )
+    }
+
+    drawCircle(style.pointHighlightColor, with(density) { dimensions.pointRadius.toPx() }, avgPt)
+    drawCircle(style.pointHighlightColor, with(density) { dimensions.pointRadius.toPx() }, yourPt)
+}
+
 @Preview(showBackground = true)
 @Composable
 fun PreviewInsuranceRateChart() {
-    InsuranceRateChart1(
-        style = ChartStyle(yourLineColor = Color.Green,
-            avgLineColor = Color.Blue,
-            avgLineType = LineType.Dashed
-        ),
+    InsuranceRateChart(
         data = RateChartData(
             labels = listOf("Sep", "Oct", "Nov", "Dec", "Jan", "Feb"),
             yourRates = List(6) { 37f },
